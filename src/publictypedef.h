@@ -50,8 +50,8 @@ typedef enum
         FTS_INVALID_SOCKET               = 26 ,  /**< Socket is invalid */
         FTS_CORRUPT_PACKET_BUFFER        = 27 ,  /**< Packet buffer is corrupted */
         FTS_UNKNOWN_NETWORK_STACK_ERROR  = 28 ,  /**< Unknown network stack error */
-        FTS_NO_STORED_AP_IN_DCT          = 29 ,  /**< DCT contains no AP credentials */
-        FTS_STA_JOIN_FAILED              = 30 ,  /**< Join failed */
+        FTS_BIND_ERROR                   = 29 ,  /**< Error bind create */
+        FTS_LISTEN_ERROR                 = 30 ,  /**< Listen socket fail */
         FTS_PACKET_BUFFER_OVERFLOW       = 31 ,  /**< Packet buffer overflow */
         FTS_ALREADY_INITIALIZED          = 32 ,  /**< Module has already been inited */
         FTS_EMPTY_EMAIL_LIST             = 33 ,  /**< Email list is empty */

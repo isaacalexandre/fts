@@ -3,10 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "libftsserver.h"
 #include "publictypedef.h"
-#include <sys/types.h>
-#include <sys/socket.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,13 +43,20 @@ extern "C" {
 
 /**
  * @brief
+ * Set lib debug
+ * @param[in] enabled
+ * Select debug
+ */
+void server_fts_debug_enable(bool enabled);
+
+/**
+ * @brief
  * Create a handle to a Socket
  * @param[in,out] fd
  * Handler number of the socket
  * @return Returns FTS_SUCCESS if the function succeeds.
  */
-fts_result_t socket_create(int* fd, int port);
-
+fts_result_t server_fts_socket_create(uint16_t port, uint32_t ip_server);
 
 #ifdef __cplusplus
 }
