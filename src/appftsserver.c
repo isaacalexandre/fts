@@ -19,8 +19,9 @@
 /******************************************************
  *                    Constants
  ******************************************************/
-#define PORT_DEFAULT (2323)
-#define ADDR_DEFAULT ((uint32_t)0x7F000001) //127.0.0.1
+#define PORT_DEFAULT    (2323)
+#define ADDR_DEFAULT    (0) //127.0.0.1
+#define PATH_FILE_SIZE  (1000)
 
 void usage() {
     printf("usage:\n");
@@ -31,6 +32,8 @@ void usage() {
     printf("        Default = Local Host\n\n");
     printf("-p      Port Host Server [1 - 65535]\n");
     printf("        Default = 2323\n\n");
+    printf("-l      Path to save file will receive\n");
+    printf("        Default = Local where the program was executed\n\n");
     printf("\r\n");
     exit(1);
 }
@@ -65,13 +68,14 @@ void usage() {
 
 int main (int argc, char *argv[])
 {
-    int32_t c           = 0;
-    bool b_debug        = 0;
-    uint16_t port_fts   = PORT_DEFAULT; //Select port by default;
-    uint32_t addr_fts   = ADDR_DEFAULT; //Select address by default;
-    fts_result_t ret    = FTS_ERROR;
- 
-    while ((c = getopt (argc, argv, "d:p:a:h:stv")) != -1) {
+    int32_t c                       = 0;
+    bool b_debug                    = 0;
+    uint16_t port_fts               = PORT_DEFAULT; //Select port by default;
+    uint32_t addr_fts               = ADDR_DEFAULT; //Select address by default;
+    char path_file[PATH_FILE_SIZE]  = {'\0'};
+    fts_result_t ret                = FTS_ERROR;
+
+    while ((c = getopt (argc, argv, "d:p:a:l:h:stv")) != -1) {
         switch (c) {
         case 'd':
             b_debug = (bool) atoi(optarg);
@@ -86,6 +90,10 @@ int main (int argc, char *argv[])
                 PRINT_APP_FTS(("Address: %s",optarg));
             else
                 PRINT_APP_FTS(("Invalid Address, IP used: 127.0.0.1"));            
+            break;
+        case 'l':
+            strcpy(path_file, optarg);
+            PRINT_APP_FTS(("Path: %s",path_file));
             break;
         case 'h':
         case '?':
@@ -102,10 +110,25 @@ int main (int argc, char *argv[])
     PRINT_APP_FTS(("Start Server FTS"));
 
     //Create server socket
-    ret = server_fts_socket_create(port_fts, addr_fts);
+    PRINT_APP_FTS(("Start Socket create"));
+    ret = server_fts_socket_init(port_fts, addr_fts);
     if( ret != FTS_SUCCESS ){
         PRINT_APP_FTS(("Fail to create socket: ret=[%d]",ret));
     }
 
+    //Call to receive file
+    PRINT_APP_FTS(("Start receive file process"));
+    ret = server_fts_process_receive_file((const char*)path_file);
+    if( ret != FTS_SUCCESS ){
+        PRINT_APP_FTS(("Fail receiving file: ret=[%d]",ret));
+    }
+
+    //Destroy server socket
+    ret = server_fts_socket_deinit();
+    if( ret != FTS_SUCCESS ){
+        PRINT_APP_FTS(("Fail to destroy socket: ret=[%d]",ret));
+    }
+
+    PRINT_APP_FTS((" "));
     return 0;
 }
