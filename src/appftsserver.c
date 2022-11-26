@@ -112,8 +112,9 @@ int main (int argc, char *argv[])
     //Create server socket
     PRINT_APP_FTS(("Start Socket create"));
     ret = server_fts_socket_init(port_fts, addr_fts);
-    if( ret != FTS_SUCCESS ){
+    if( ret != FTS_SUCCESS ){       
         PRINT_APP_FTS(("Fail to create socket: ret=[%d]",ret));
+        goto out;
     }
 
     //Call to receive file
@@ -122,7 +123,8 @@ int main (int argc, char *argv[])
     if( ret != FTS_SUCCESS ){
         PRINT_APP_FTS(("Fail receiving file: ret=[%d]",ret));
     }
-
+    
+out:
     //Destroy server socket
     ret = server_fts_socket_deinit();
     if( ret != FTS_SUCCESS ){

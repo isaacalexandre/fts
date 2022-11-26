@@ -22,8 +22,9 @@ bool b_debug = false;
  *                      Macros
  ******************************************************/
 #define UNUSED(x) (void)(x)
-#define LISTENQ 8 /*maximum number of client connections */
+#define LISTENQ 8 //Maximum number of client connections 
 #define DEBUG_FTS(args) do {if(b_debug){printf ("\r\n[SERVER FTS]: ");printf args;}} while(0==1)
+#define DEBUG_FTS_FRAME(buffer,size) do {if(b_debug){printf_buffer_hex_char("SERVER FTS",buffer,size);}} while(0==1)
 
 /******************************************************
  *                    Constants
@@ -53,43 +54,6 @@ bool b_debug = false;
 /******************************************************
  *               Interface functions
  ******************************************************/
-#define STEP_PRINT 100
-static void server_fts_printf_buffer_(uint8_t* p_buffer, uint32_t size)
-{
-    if(b_debug && size > 0){
-        uint32_t size_aux = size;
-        uint32_t print_step = 0;
-        uint8_t* p_buffer_char = p_buffer;
-    
-        printf("\r\n[SERVER FTS]: Frame log - %d bytes\r\n", size);
-        while(size_aux != 0){
-            if(size_aux <= STEP_PRINT){
-                print_step = size_aux;
-                size_aux = 0;
-            } else {
-                print_step = STEP_PRINT;
-                size_aux -= STEP_PRINT;
-            }
-
-            //Hold the pointer to print in char
-            p_buffer_char = p_buffer;
-            
-            printf("   ");
-
-            for (size_t i = 0; i < print_step; i++) 
-                printf("%X ", *(p_buffer++));
-            
-            printf("   ");
-
-            for (size_t i = 0; i < print_step; i++) 
-                printf("%c", *(p_buffer_char++));
-
-            printf("\r\n");
-        }
-        printf("\r\n");
-    }
-}
-
 void server_fts_debug_enable(bool enabled)
 {
     b_debug = enabled;
@@ -149,31 +113,49 @@ out:
 
 fts_result_t server_fts_process_receive_file(const char* path)
 {
-    UNUSED(path);
     int loopfd;
     int rcv_data_len = 0;
     uint8_t buffer[BUFFER_SIZE] = {0};
+    fts_result_t ret = FTS_ERROR;
+
+    //Sanity check
+    if(sockfd_ <= 0) {
+        DEBUG_FTS(("Socket not created"));
+        ret = FTS_INVALID_SOCKET;
+        goto out;
+    }
+    if(path == NULL){
+        DEBUG_FTS(("Path pointer is null"));
+        ret = FTS_BADARG;
+        goto out;
+    }
+
+    //Accept request
+    DEBUG_FTS(("Call accept"));
+    loopfd = accept(sockfd_, NULL, NULL);
+    DEBUG_FTS(("Accepted - Socket FD: [%d]", sockfd_));
 
     while (1) {
-        DEBUG_FTS(("Call accept"));
-        loopfd = accept(sockfd_, NULL, NULL);
-        DEBUG_FTS(("Accepted - Socket FD: [%d]", sockfd_));
+        
         DEBUG_FTS(("Call RECV"));
         rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
         DEBUG_FTS(("Received %d bytes", rcv_data_len));
-        DEBUG_FTS(("Call SEND %d byte", rcv_data_len));
-        send(loopfd, buffer, rcv_data_len , 0);
-
         //Print buffer
-        server_fts_printf_buffer_(buffer, rcv_data_len);
-        
-        close(loopfd);
-    }
+        DEBUG_FTS_FRAME(buffer, rcv_data_len);
 
-    return FTS_SUCCESS;
+        DEBUG_FTS(("Call SEND %d byte", rcv_data_len));
+        send(loopfd, "1", 1 , 0);
+    }
+    
+    close(loopfd);
+
+    ret = FTS_SUCCESS;
+out:
+    return ret;
 }
 
 fts_result_t server_fts_socket_deinit(void)
 {
+    DEBUG_FTS(("Destroy socket"));
     return (close(sockfd_) < 0 ? FTS_ERROR : FTS_SUCCESS);
 }

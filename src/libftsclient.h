@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "publictypedef.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,8 +40,40 @@ extern "C" {
 /******************************************************
  *               Function Definitions
  ******************************************************/
-int fts_test(void);
+/**
+ * @brief
+ * Set lib debug
+ * @param[in] enabled
+ * Select debug
+ */
+void client_fts_debug_enable(bool enabled);
 
+/**
+ * @brief
+ * Create a handle to a Socket
+ * @param[in] port
+ * Socket port number
+ * @param[in] ip_server
+ * Socket IP number
+ * @return Returns FTS_SUCCESS if the function succeeds.
+ */
+fts_result_t client_fts_socket_init(uint16_t port, uint32_t ip_server);
+
+/**
+ * @brief
+ * Call to send file to server
+ * @param[in] path
+ * Path in the system to send the file.
+ * @return Returns FTS_SUCCESS if the function succeeds.
+ */
+fts_result_t client_fts_process_send_file(const char* path);
+
+/**
+ * @brief
+ * Destroy the socket created
+ * @return Returns FTS_SUCCESS if the function succeeds.
+ */
+fts_result_t client_fts_socket_deinit(void);
 
 #ifdef __cplusplus
 }

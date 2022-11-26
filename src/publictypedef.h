@@ -54,13 +54,15 @@ typedef enum
         FTS_LISTEN_ERROR                 = 30 ,  /**< Listen socket fail */
         FTS_PACKET_BUFFER_OVERFLOW       = 31 ,  /**< Packet buffer overflow */
         FTS_ALREADY_INITIALIZED          = 32 ,  /**< Module has already been inited */
-        FTS_EMPTY_EMAIL_LIST             = 33 ,  /**< Email list is empty */
-        FTS_EMPTY_RECEIVER_FLAG          = 34 ,  /**< Receiver flag is empty */
+        FTS_SEND_PACKET_ERROR            = 33 ,  /**< Packet send error */
+        FTS_RECV_PACKET_ERROR            = 34 ,  /**< Packet receive error */
         FTS_BUSY                         = 35 ,  /**< Busy */
         FTS_UNAUTHORIZED                 = 36 ,  /**< Unauthorized */
         FTS_FORBIDDEN                    = 37 ,  /**< Forbidden */
         FTS_PRECONDITION_FAILED          = 38 ,  /**< Precondition failed */
-        FTS_CONFLICT                     = 49 ,  /**< Conflict */
+        FTS_OPEN_FILE_ERROR              = 39 ,  /**< Error opening file */
+        FTS_SEEK_FILE_ERROR              = 40 ,  /**< Error seek file */
+        FTS_READ_FILE_ERROR              = 41 ,  /**< Error read file */
 }fts_result_t;
 
 /******************************************************
