@@ -155,6 +155,67 @@ out:
     return ret;
 }
 
+static fts_result_t server_fts_process_rcv_(file_header_params_t* st_headers)
+{
+    int loopfd = 0;
+    int rcv_data_len = 0;
+    uint8_t buffer[BUFFER_SIZE] = {0};
+    FILE* p_file = NULL;
+    fts_result_t ret = FTS_ERROR;
+
+    //Accept request
+    DEBUG_FTS(("Call accept"));
+    loopfd = accept(sockfd_, NULL, NULL);
+    DEBUG_FTS(("Accepted - Socket FD: [%d]", sockfd_));
+
+    //Receive file name
+    DEBUG_FTS(("Call RECV"));
+    rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
+    DEBUG_FTS(("Received %d bytes", rcv_data_len));
+    //Print buffer
+    DEBUG_FTS_FRAME(buffer, rcv_data_len);
+
+    //Set headers
+    ret = server_fts_recv_header_((char*)buffer, st_headers);
+    if(ret != FTS_SUCCESS){
+        DEBUG_FTS(("Fail parse header"));
+        //Send fail to client
+        send(loopfd, "0", 1 , 0);
+        goto out;
+    }
+    DEBUG_FTS(("Call SEND - Header OK"));
+    send(loopfd, "1", 1 , 0);
+
+    //Create file
+    DEBUG_FTS(("Open file at path: [%s]", st_headers->path));
+    p_file = fopen(st_headers->path,"w");
+    if (p_file == NULL){
+        DEBUG_FTS(("Error creating file"));
+        ret = FTS_OPEN_FILE_ERROR;
+        goto out;
+    }
+
+    do{
+        DEBUG_FTS(("Call RECV"));
+        rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
+        fwrite(buffer, rcv_data_len, 1, p_file);
+        DEBUG_FTS(("Received %d bytes", rcv_data_len));
+        //Print buffer
+        DEBUG_FTS_FRAME(buffer, rcv_data_len);
+        DEBUG_FTS(("Call SEND"));
+        send(loopfd, "1", 1 , 0);
+    }while(rcv_data_len > 0);
+
+    ret= FTS_SUCCESS;
+out:
+    //Close the file
+    fclose(p_file);
+    //Close the session socket
+    close(loopfd);
+
+    return ret;
+}
+
 fts_result_t server_fts_socket_init(uint16_t port, uint32_t ip_server)
 {
     fts_result_t ret = FTS_ERROR;
@@ -207,13 +268,10 @@ out:
     return ret;
 }
 
-fts_result_t server_fts_process_receive_file(const char* path, size_t path_max_size)
+fts_result_t server_fts_process_receive_file(const char* path)
 {
-    int loopfd = 0;
-    int rcv_data_len = 0;
-    uint8_t buffer[BUFFER_SIZE] = {0};
-    FILE* p_file = NULL;
     file_header_params_t st_file;
+    char path_local[PATH_FILE_SIZE] = {0};
     fts_result_t ret = FTS_ERROR;
 
     //Sanity check
@@ -228,62 +286,37 @@ fts_result_t server_fts_process_receive_file(const char* path, size_t path_max_s
         goto out;
     }
 
+    //Verify if fit the path
+    if(strlen(path) > PATH_FILE_SIZE) {
+        DEBUG_FTS(("Path size is bigger then buffer"));
+        ret = FTS_BADARG;
+        goto out;
+    }
+
     //Set variables
-    st_file.path = (char*)path;
-    st_file.path_buffer_size = path_max_size;
+    st_file.path = (char*)path_local;
+    st_file.path_buffer_size = PATH_FILE_SIZE;
+    
+    while(1){
+        //Copy path to local path
+        strcpy(st_file.path, path);
 
-    //Accept request
-    DEBUG_FTS(("Call accept"));
-    loopfd = accept(sockfd_, NULL, NULL);
-    DEBUG_FTS(("Accepted - Socket FD: [%d]", sockfd_));
+        //Process receive file
+        ret = server_fts_process_rcv_(&st_file);
+        if(ret != FTS_SUCCESS){
+            DEBUG_FTS(("Error process receive file"));
+            goto out;
+        }
 
-    //Receive file name
-    DEBUG_FTS(("Call RECV"));
-    rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
-    DEBUG_FTS(("Received %d bytes", rcv_data_len));
-    //Print buffer
-    DEBUG_FTS_FRAME(buffer, rcv_data_len);
-
-    //Set headers
-    ret = server_fts_recv_header_((char*)buffer, &st_file);
-    if(ret != FTS_SUCCESS){
-        DEBUG_FTS(("Fail parse header"));
-        //Send fail to client
-        send(loopfd, "0", 1 , 0);
-        goto out;
+        //Verify CRC
+        ret = server_fts_verify_crc_(st_file.path, st_file.crc);
+        //If the CRC not match, delete the file    
+        if(ret != FTS_SUCCESS) {
+            DEBUG_FTS(("Delete file: [%s]", st_file.path));
+            remove(st_file.path);
+        }
     }
-    DEBUG_FTS(("Call SEND - Header OK"));
-    send(loopfd, "1", 1 , 0);
-
-    //Create file
-    DEBUG_FTS(("Open file at path: [%s]", st_file.path));
-    p_file = fopen(st_file.path,"w");
-    if (p_file == NULL){
-        DEBUG_FTS(("Error creating file"));
-        ret = FTS_OPEN_FILE_ERROR;
-        goto out;
-    }
-
-    do{
-        DEBUG_FTS(("Call RECV"));
-        rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
-        fwrite(buffer, rcv_data_len, 1, p_file);
-        DEBUG_FTS(("Received %d bytes", rcv_data_len));
-        //Print buffer
-        DEBUG_FTS_FRAME(buffer, rcv_data_len);
-
-        DEBUG_FTS(("Call SEND"));
-        send(loopfd, "1", 1 , 0);
-    }while(rcv_data_len > 0);
-
-    //Close the file
-    fclose(p_file);
-    //Close the session socket
-    close(loopfd);
-
-    //Verify CRC
-    ret = server_fts_verify_crc_(st_file.path, st_file.crc);    
-    //TODO - Delete file if CRC do not match
+    
 out:
     return ret;
 }

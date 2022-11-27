@@ -75,6 +75,7 @@ int main (int argc, char *argv[])
     char path_file[PATH_FILE_SIZE]  = {'\0'};
     fts_result_t ret                = FTS_ERROR;
 
+    //TODO - Add parameter to transfer whole directory
     while ((c = getopt (argc, argv, "d:p:a:l:h:stv")) != -1) {
         switch (c) {
         case 'd':
@@ -128,7 +129,10 @@ int main (int argc, char *argv[])
     ret = client_fts_process_send_file((const char*)path_file);
     if( ret != FTS_SUCCESS ){
         PRINT_APP_FTS(("Fail send file: ret=[%d]",ret));
+        goto out;
     }
+
+    PRINT_APP_FTS(("File [%s] transfered successfully!", path_file));
 
 out:
     //Destroy server socket

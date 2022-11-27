@@ -296,7 +296,6 @@ fts_result_t client_fts_process_send_file(const char* path)
     fts_result_t ret = FTS_ERROR;
     uint32_t crc = 0;
 
-    
     //Sanity check
     if(sockfd_ <= 0){
         DEBUG_FTS(("Socket not created"));
@@ -311,8 +310,7 @@ fts_result_t client_fts_process_send_file(const char* path)
 
     //Calcule CRC of the file
     DEBUG_FTS(("Calcule CRC32 of the file"));
-    if( file_crc32(&crc, path) == false)
-    {
+    if( file_crc32(&crc, path) == false) {
         DEBUG_FTS(("Fail calculate CRC32"));
         ret = FTS_PARTIAL_RESULTS;
         goto out;

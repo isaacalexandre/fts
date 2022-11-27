@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
 #include "util.h"
 #include "libftsserver.h"
 
@@ -73,6 +75,7 @@ int main (int argc, char *argv[])
     uint16_t port_fts               = PORT_DEFAULT; //Select port by default;
     uint32_t addr_fts               = ADDR_DEFAULT; //Select address by default;
     char path_file[PATH_FILE_SIZE]  = {'\0'};
+    DIR* dir                        = NULL;
     fts_result_t ret                = FTS_ERROR;
 
     while ((c = getopt (argc, argv, "d:p:a:l:h:stv")) != -1) {
@@ -109,6 +112,19 @@ int main (int argc, char *argv[])
 
     PRINT_APP_FTS(("Start Server FTS"));
 
+    //Verify if directory exist
+    if(strlen(path_file) > 0) {
+        PRINT_APP_FTS(("Verify if directory exist"));
+        dir = opendir(path_file);
+        if (dir) {
+            closedir(dir);
+            PRINT_APP_FTS(("Directory exist"));
+        } else {
+            PRINT_APP_FTS(("Directory not exist"));
+            goto out;
+        }
+    }
+
     //Create server socket
     PRINT_APP_FTS(("Start Socket create"));
     ret = server_fts_socket_init(port_fts, addr_fts);
@@ -116,10 +132,9 @@ int main (int argc, char *argv[])
         PRINT_APP_FTS(("Fail to create socket: ret=[%d]",ret));
         goto out;
     }
-
     //Call to receive file
     PRINT_APP_FTS(("Start receive file process"));
-    ret = server_fts_process_receive_file((const char*)path_file, PATH_FILE_SIZE);
+    ret = server_fts_process_receive_file((const char*)path_file);
     if( ret != FTS_SUCCESS ){
         PRINT_APP_FTS(("Fail receiving file: ret=[%d]",ret));
     }
@@ -130,7 +145,6 @@ out:
     if( ret != FTS_SUCCESS ){
         PRINT_APP_FTS(("Fail to destroy socket: ret=[%d]",ret));
     }
-
-    PRINT_APP_FTS((" "));
+    
     return 0;
 }
