@@ -23,15 +23,16 @@ bool b_debug = false;
  *                      Macros
  ******************************************************/
 #define UNUSED(x) (void)(x)
-#define LISTENQ 8 /*maximum number of client connections */
+#define LISTENQ 8 //Maximum number of client connections
 #define DEBUG_FTS(args) do {if(b_debug){printf ("\r\n[CLIENT FTS]: ");printf args;}} while(0==1)
 #define DEBUG_FTS_FRAME(buffer,size) do {if(b_debug){printf_buffer_hex_char("CLIENT FTS",buffer,size);}} while(0==1)
 
 /******************************************************
  *                    Constants
  ******************************************************/
-#define BUFFER_SIZE (512)
-#define SEND_RETRIES (3)
+#define BUFFER_SIZE     (2048)
+#define SEND_RETRIES    (3)
+#define PATH_FILE_SIZE  (1000)
 
 /******************************************************
  *                   Enumerations
@@ -56,6 +57,64 @@ bool b_debug = false;
 /******************************************************
  *               Interface functions
  ******************************************************/
+
+static fts_result_t client_fts_send_header_(char* filename, size_t size, uint32_t crc32)
+{
+    fts_result_t ret = FTS_ERROR;
+    uint8_t buffer[PATH_FILE_SIZE] = {0};
+    size_t size_buffer_send = 0;
+    size_t bytes_read = 0;
+
+    //Sanity
+    if(filename == NULL){
+        DEBUG_FTS(("Pointer null"));
+        ret = FTS_BADARG;
+        goto out;
+    }
+
+    //Verify is the name fits in the buffer
+    if(strlen(filename) > PATH_FILE_SIZE - 50){
+        DEBUG_FTS(("Size of filename is bigger then buffer"));
+        ret = FTS_BADVALUE;
+        goto out;
+    }
+
+    //Create the payload
+    sprintf((char *)buffer,"%s/%lu/%u", filename, (long unsigned int)size, crc32);
+    DEBUG_FTS(("Header: %s", buffer));
+
+    size_buffer_send = strlen((char*)buffer)+1;
+    
+    //Send the chunk 
+    DEBUG_FTS(("Send chunk to the server"));
+    if(size_buffer_send != (size_t)send(sockfd_, buffer, size_buffer_send, 0)){
+        DEBUG_FTS(("Error send chunk"));
+        ret = FTS_SEND_PACKET_ERROR;
+        goto out;
+    }
+    //Debug frame send
+    DEBUG_FTS_FRAME(buffer, size_buffer_send);
+
+    //Verify the response
+    DEBUG_FTS(("Receive response"));
+    bzero(buffer, PATH_FILE_SIZE);    
+    bytes_read = recv(sockfd_, buffer, PATH_FILE_SIZE, 0);
+    if(bytes_read <= 0){
+        DEBUG_FTS(("Error response: abort"));
+        ret = FTS_RECV_PACKET_ERROR;
+        goto out;
+    }
+
+    //Verify if the respose was right
+    if(bytes_read == 1 && buffer[0] == '1')
+        ret = FTS_SUCCESS;
+    else
+        ret = FTS_RECV_PACKET_ERROR;
+
+out:
+    return ret;
+}
+
 static fts_result_t client_fts_send_file_(FILE* p_file, size_t size)
 {
     fts_result_t ret = FTS_ERROR;
@@ -115,11 +174,10 @@ static fts_result_t client_fts_send_file_(FILE* p_file, size_t size)
         //Verify the response
         DEBUG_FTS(("Receive response"));
         bzero(buffer, BUFFER_SIZE);
-        do{
-            bytes_read = recv(sockfd_, buffer, BUFFER_SIZE, 0);
-        }while(bytes_read <= 0);
-        
-        if(bytes_read <= 0){
+        bytes_read = recv(sockfd_, buffer, BUFFER_SIZE, 0);
+
+        //Verify if server receive successfully
+        if(bytes_read != 1 || buffer[0] != '1'){
             if(++err_count > SEND_RETRIES){
                 DEBUG_FTS(("Error response try again, error count = [%d]", err_count));
                 continue;
@@ -234,7 +292,10 @@ fts_result_t client_fts_process_send_file(const char* path)
 {
     static FILE *p_file = NULL;
     size_t file_size = 0;    
+    char* filename = NULL;
     fts_result_t ret = FTS_ERROR;
+    uint32_t crc = 0;
+
     
     //Sanity check
     if(sockfd_ <= 0){
@@ -248,9 +309,30 @@ fts_result_t client_fts_process_send_file(const char* path)
         goto out;
     }
 
+    //Calcule CRC of the file
+    DEBUG_FTS(("Calcule CRC32 of the file"));
+    if( file_crc32(&crc, path) == false)
+    {
+        DEBUG_FTS(("Fail calculate CRC32"));
+        ret = FTS_PARTIAL_RESULTS;
+        goto out;
+    }
+    DEBUG_FTS(("CRC32: 0x%08X",crc));
+
+    //Get name of the file
+    get_filename_from_path((char*)path, &filename);
+    DEBUG_FTS(("Filename: %s", filename));
+
     ret = client_fts_open_file_(path, &p_file, &file_size);
     if(ret != FTS_SUCCESS){
         DEBUG_FTS(("Fail open file"));
+        goto out;
+    }
+
+    //Send the header to server
+    ret = client_fts_send_header_(filename, file_size, crc);
+    if(ret != FTS_SUCCESS){
+        DEBUG_FTS(("Fail send header"));
         goto out;
     }
 

@@ -29,7 +29,8 @@ bool b_debug = false;
 /******************************************************
  *                    Constants
  ******************************************************/
-#define BUFFER_SIZE (2048)
+#define BUFFER_SIZE     (2048)
+#define PATH_FILE_SIZE  (1000)
 
 /******************************************************
  *                   Enumerations
@@ -38,6 +39,12 @@ bool b_debug = false;
 /******************************************************
  *                 Type Definitions
  ******************************************************/
+typedef struct {
+    char* path;
+    size_t path_buffer_size;
+    size_t size_file;
+    uint32_t crc;
+} file_header_params_t;
 
 /******************************************************
  *                    Structures
@@ -57,6 +64,95 @@ bool b_debug = false;
 void server_fts_debug_enable(bool enabled)
 {
     b_debug = enabled;
+}
+
+static fts_result_t server_fts_verify_crc_(char* path, uint32_t crc)
+{
+    uint32_t crc_file = 0;
+
+    //Calcule CRC of the file
+    DEBUG_FTS(("Calcule CRC32 of the file at path: [%s]", path));
+    if( file_crc32(&crc_file, path) == false)
+    {
+        DEBUG_FTS(("Fail calculate CRC32"));
+        return FTS_PARTIAL_RESULTS;
+    }
+    DEBUG_FTS(("CRC32 FILE: 0x%08X",crc_file));
+    DEBUG_FTS(("CRC32 PARAM: 0x%08X",crc));
+
+    return (crc_file == crc ? FTS_SUCCESS : FTS_BADVALUE);
+}
+
+#define NUM_GET_STR_SIZE 20
+static fts_result_t server_fts_recv_header_(char* buffer, file_header_params_t* st_headers)
+{
+    fts_result_t ret = FTS_ERROR;
+    char filename[PATH_FILE_SIZE] = {'\0'};
+    char aux_num[NUM_GET_STR_SIZE] = {'\0'};
+    size_t size_path = strlen(st_headers->path);
+
+    //Sanity
+    if(buffer == NULL || st_headers == NULL){
+        DEBUG_FTS(("Buffer pointer is null"));
+        ret = FTS_BADARG;
+        goto out;
+    }
+    if(st_headers->path == NULL){
+        DEBUG_FTS(("Path pointer is null"));
+        ret = FTS_BADARG;
+        goto out;
+    }
+
+    //Get info from buffer the variables
+    //Filename
+    for (size_t i = 0; i < PATH_FILE_SIZE; i++) {
+        if(*(buffer) != '/') {
+            filename[i] = *buffer;
+        } else {
+            filename[i] = '\0';
+            buffer++;
+            break;
+        }
+        buffer++;
+    }
+    DEBUG_FTS(("Header Path: %s", filename));
+
+    //Size File
+    for (size_t i = 0; i < NUM_GET_STR_SIZE; i++) {
+        if(*(buffer) != '/') {
+            aux_num[i] = *buffer;
+        } else {
+            aux_num[i] = '\0';
+            buffer++;
+            break;
+        }
+        buffer++;
+    }
+    st_headers->size_file = atol(aux_num);
+    DEBUG_FTS(("Header Size File: 0x%08X", (unsigned int)st_headers->size_file));
+
+    //CRC - Copy rest of the buffer
+    strcpy(aux_num,buffer);
+    st_headers->crc = atoi(aux_num);
+    DEBUG_FTS(("Header CRC: 0x%08X bytes", (unsigned int)st_headers->crc));
+
+    //Verify size of path and filename
+    if(strlen(filename) + size_path > st_headers->path_buffer_size){
+        DEBUG_FTS(("Size Filename + Path oversized buffer"));
+        ret = FTS_BADVALUE;
+        goto out;
+    }
+
+    //If path do not have slash, need be insert
+    if( size_path > 0 && is_slash_end_str(st_headers->path) == false)
+        strcat(st_headers->path, "/");
+    
+    //Concat path with filenmae
+    strcat(st_headers->path, filename);
+
+    ret = FTS_SUCCESS;
+out:
+    return ret;
 }
 
 fts_result_t server_fts_socket_init(uint16_t port, uint32_t ip_server)
@@ -111,11 +207,13 @@ out:
     return ret;
 }
 
-fts_result_t server_fts_process_receive_file(const char* path)
+fts_result_t server_fts_process_receive_file(const char* path, size_t path_max_size)
 {
-    int loopfd;
+    int loopfd = 0;
     int rcv_data_len = 0;
     uint8_t buffer[BUFFER_SIZE] = {0};
+    FILE* p_file = NULL;
+    file_header_params_t st_file;
     fts_result_t ret = FTS_ERROR;
 
     //Sanity check
@@ -130,26 +228,62 @@ fts_result_t server_fts_process_receive_file(const char* path)
         goto out;
     }
 
+    //Set variables
+    st_file.path = (char*)path;
+    st_file.path_buffer_size = path_max_size;
+
     //Accept request
     DEBUG_FTS(("Call accept"));
     loopfd = accept(sockfd_, NULL, NULL);
     DEBUG_FTS(("Accepted - Socket FD: [%d]", sockfd_));
 
-    while (1) {
-        
+    //Receive file name
+    DEBUG_FTS(("Call RECV"));
+    rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
+    DEBUG_FTS(("Received %d bytes", rcv_data_len));
+    //Print buffer
+    DEBUG_FTS_FRAME(buffer, rcv_data_len);
+
+    //Set headers
+    ret = server_fts_recv_header_((char*)buffer, &st_file);
+    if(ret != FTS_SUCCESS){
+        DEBUG_FTS(("Fail parse header"));
+        //Send fail to client
+        send(loopfd, "0", 1 , 0);
+        goto out;
+    }
+    DEBUG_FTS(("Call SEND - Header OK"));
+    send(loopfd, "1", 1 , 0);
+
+    //Create file
+    DEBUG_FTS(("Open file at path: [%s]", st_file.path));
+    p_file = fopen(st_file.path,"w");
+    if (p_file == NULL){
+        DEBUG_FTS(("Error creating file"));
+        ret = FTS_OPEN_FILE_ERROR;
+        goto out;
+    }
+
+    do{
         DEBUG_FTS(("Call RECV"));
         rcv_data_len = recv(loopfd, buffer, BUFFER_SIZE, 0);
+        fwrite(buffer, rcv_data_len, 1, p_file);
         DEBUG_FTS(("Received %d bytes", rcv_data_len));
         //Print buffer
         DEBUG_FTS_FRAME(buffer, rcv_data_len);
 
-        DEBUG_FTS(("Call SEND %d byte", rcv_data_len));
+        DEBUG_FTS(("Call SEND"));
         send(loopfd, "1", 1 , 0);
-    }
-    
+    }while(rcv_data_len > 0);
+
+    //Close the file
+    fclose(p_file);
+    //Close the session socket
     close(loopfd);
 
-    ret = FTS_SUCCESS;
+    //Verify CRC
+    ret = server_fts_verify_crc_(st_file.path, st_file.crc);    
+    //TODO - Delete file if CRC do not match
 out:
     return ret;
 }

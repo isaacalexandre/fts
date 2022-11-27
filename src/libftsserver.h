@@ -65,9 +65,11 @@ fts_result_t server_fts_socket_init(uint16_t port, uint32_t ip_server);
  * Call to receive file from the client
  * @param[in] path
  * Path in the system to receive the file.
+ * @param[in] path_max_size
+ * Max size of the buffer of path pointer
  * @return Returns FTS_SUCCESS if the function succeeds.
  */
-fts_result_t server_fts_process_receive_file(const char* path);
+fts_result_t server_fts_process_receive_file(const char* path, size_t path_max_size);
 
 /**
  * @brief

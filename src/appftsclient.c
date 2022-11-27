@@ -86,7 +86,7 @@ int main (int argc, char *argv[])
             PRINT_APP_FTS(("Port number: %d",port_fts));
             break;
         case 'a':
-            if(ipStringToNumber(optarg, &addr_fts))
+            if(ip_string_to_number(optarg, &addr_fts))
                 PRINT_APP_FTS(("Address: %s",optarg));
             else
                 PRINT_APP_FTS(("Invalid Address, IP used: 127.0.0.1"));            
@@ -108,6 +108,12 @@ int main (int argc, char *argv[])
         client_fts_debug_enable(b_debug);
 
     PRINT_APP_FTS(("Start Server FTS"));
+
+    //Verify if path was defined
+    if(strlen(path_file) == 0){
+        PRINT_APP_FTS(("Path files is empty"));
+        goto out;
+    }
 
     //Create server socket
     PRINT_APP_FTS(("Start Socket create"));

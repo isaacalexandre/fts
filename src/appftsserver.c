@@ -86,7 +86,7 @@ int main (int argc, char *argv[])
             PRINT_APP_FTS(("Port number: %d",port_fts));
             break;
         case 'a':
-            if(ipStringToNumber(optarg, &addr_fts))
+            if(ip_string_to_number(optarg, &addr_fts))
                 PRINT_APP_FTS(("Address: %s",optarg));
             else
                 PRINT_APP_FTS(("Invalid Address, IP used: 127.0.0.1"));            
@@ -119,7 +119,7 @@ int main (int argc, char *argv[])
 
     //Call to receive file
     PRINT_APP_FTS(("Start receive file process"));
-    ret = server_fts_process_receive_file((const char*)path_file);
+    ret = server_fts_process_receive_file((const char*)path_file, PATH_FILE_SIZE);
     if( ret != FTS_SUCCESS ){
         PRINT_APP_FTS(("Fail receiving file: ret=[%d]",ret));
     }
